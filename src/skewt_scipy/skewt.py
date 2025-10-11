@@ -21,6 +21,7 @@ All Rights Reserved.
 import numpy as np
 from scipy import integrate, optimize
 from scipy._lib._util import _lazyselect
+import scipy._lib.array_api_extra as xpx
 from scipy.special import loggamma
 from scipy.stats import (
     cauchy,
@@ -36,83 +37,7 @@ from scipy.stats import (
 from scipy.stats._distn_infrastructure import _ShapeInfo
 
 
-# Define _lazywhere as it was removed from scipy
-def _lazywhere(cond, arrays, f, f2=None):
-    """
-    Evaluate a function on array elements where a condition is met.
 
-    This is a replacement for scipy._lib._util._lazywhere which was removed
-    in scipy 1.12+.
-
-    Parameters
-    ----------
-    cond : array_like
-        Boolean condition array
-    arrays : tuple of arrays
-        Arrays to pass to functions
-    f : callable
-        Function to call where cond is True
-    f2 : callable, array, or None, optional
-        Function to call where cond is False, or a constant array/value.
-        If None, uses 0.
-
-    Returns
-    -------
-    out : array
-        Result array with f applied where cond is True and f2 elsewhere
-    """
-    # Handle the case where f2 is a constant value/array (not a function)
-    if f2 is None:
-        f2_is_const = True
-        f2_val = 0
-    elif callable(f2):
-        f2_is_const = False
-    else:
-        f2_is_const = True
-        f2_val = f2
-
-    arrays = tuple(np.asarray(a) for a in arrays)
-    cond = np.asarray(cond)
-
-    # Handle scalar case
-    if cond.ndim == 0:
-        if cond:
-            return f(*arrays)
-        else:
-            if f2_is_const:
-                return f2_val
-            else:
-                return f2(*arrays)
-
-    # Handle array case - determine output shape from condition or arrays
-    if arrays:
-        out_shape = np.broadcast_shapes(cond.shape, *[a.shape for a in arrays])
-        out = np.empty(out_shape, dtype=float)
-        # Broadcast condition to output shape
-        cond = np.broadcast_to(cond, out_shape)
-    else:
-        out = np.empty(np.shape(cond), dtype=float)
-
-    if np.any(cond):
-        arrays_true = tuple(np.extract(cond, np.broadcast_to(a, out.shape)) for a in arrays)
-        out[cond] = f(*arrays_true)
-
-    if np.any(~cond):
-        if f2_is_const:
-            # f2 is a constant value or array
-            if np.isscalar(f2_val):
-                out[~cond] = f2_val
-            else:
-                # f2_val is an array, extract matching elements
-                f2_val_arr = np.asarray(f2_val)
-                f2_val_broadcast = np.broadcast_to(f2_val_arr, out.shape)
-                out[~cond] = np.extract(~cond, f2_val_broadcast)
-        else:
-            # f2 is a function
-            arrays_false = tuple(np.extract(~cond, np.broadcast_to(a, out.shape)) for a in arrays)
-            out[~cond] = f2(*arrays_false)
-
-    return out
 
 
 class skewt_gen(rv_continuous):
@@ -142,11 +67,11 @@ class skewt_gen(rv_continuous):
             # if df == 1:
             #     return halfcauchy.pdf(x)
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x >= 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: 2 * t.pdf(x_, df_),
-            #         f2=lambda x_, df_: 0.0,
+            #         lambda x_, df_: 0.0,
             #     )
             condlist = [df == 1, (df != 1) & (x >= 0), (df != 1) & (x < 0)]
             funclist = [
@@ -162,11 +87,11 @@ class skewt_gen(rv_continuous):
             # if df == 1:
             #     return halfcauchy.pdf(-x)
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x <= 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: 2 * t.pdf(-x_, df_),
-            #         f2=lambda x_, df_: 0.0,
+            #         lambda x_, df_: 0.0,
             #     )
             condlist = [df == 1, (df != 1) & (x <= 0), (df != 1) & (x > 0)]
             funclist = [
@@ -179,11 +104,11 @@ class skewt_gen(rv_continuous):
         # case5 = np.vectorize(case5, otypes=["float64"])
 
         def case6(x, a, df):
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
-                [x, df],
+                (x, df),
                 lambda x_, df_: cauchy.pdf(x_),
-                f2=lambda x_, df_: t.pdf(x_, df_),
+                lambda x_, df_: t.pdf(x_, df_),
             )
 
         def case7_pdf(x, a, df):
@@ -195,12 +120,12 @@ class skewt_gen(rv_continuous):
             #         * t.pdf(x, df)
             #         * t.cdf(a * x * np.sqrt((df + 1) / (x**2 + df)), df + 1)
             #     )
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
                 (x, a, df),
                 lambda x_, a_, df_: cauchy.pdf(x_)
                 * (1 + a_ * x_ / np.sqrt(1 + x_**2 * (1 + a_**2))),
-                f2=lambda x_, a_, df_: 2
+                lambda x_, a_, df_: 2
                 * t.pdf(x_, df_)
                 * t.cdf(a_ * x_ * np.sqrt((df_ + 1) / (x_**2 + df_)), df_ + 1),
             )
@@ -234,11 +159,11 @@ class skewt_gen(rv_continuous):
             # if df == 1:
             #     return halfcauchy.logpdf(x)
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x >= 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: np.log(2) + t.logpdf(x_, df_),
-            #         f2=lambda x_, df_: -np.inf,
+            #         lambda x_, df_: -np.inf,
             #     )
             condlist = [df == 1, (df != 1) & (x >= 0), (df != 1) & (x < 0)]
             funclist = [
@@ -254,11 +179,11 @@ class skewt_gen(rv_continuous):
             # if df == 1:
             #     return halfcauchy.logpdf(-x)
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x <= 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: np.log(2) + t.logpdf(-x_, df_),
-            #         f2=lambda x_, df_: -np.inf,
+            #         lambda x_, df_: -np.inf,
             #     )
             condlist = [df == 1, (df != 1) & (x <= 0), (df != 1) & (x > 0)]
             funclist = [
@@ -271,20 +196,20 @@ class skewt_gen(rv_continuous):
         # case5 = np.vectorize(case5, otypes=["float64"])
 
         def case6(x, a, df):
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
-                [x, df],
+                (x, df),
                 lambda x_, df_: cauchy.logpdf(x_),
-                f2=lambda x_, df_: t.logpdf(x_, df_),
+                lambda x_, df_: t.logpdf(x_, df_),
             )
 
         def case7_logpdf(x, a, df):
-            # return _lazywhere(
+            # return xpx.apply_where(
             #     df == 1,
-            #     [x, a, df],
+            #     (x, a, df),
             #     lambda x_, a_, df_: cauchy.logpdf(x_)
             #     + np.log1p(a_ * x_ / np.sqrt(1 + x_**2 * (1 + a_**2))),
-            #     f2=lambda x_, a_, df_: np.log(2)
+            #     lambda x_, a_, df_: np.log(2)
             #     + t.logpdf(x_, df_)
             #     + t.logcdf(a_ * x_ * np.sqrt((df_ + 1) / (x_**2 + df_)), df_ + 1),
             # )
@@ -313,12 +238,12 @@ class skewt_gen(rv_continuous):
 
                     return result
 
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
-                [x, a, df],
+                (x, a, df),
                 lambda x_, a_, df_: cauchy.logpdf(x_)
                 + np.log1p(a_ * x_ / np.sqrt(1 + x_**2 * (1 + a_**2))),
-                f2=safe_logpdf,
+                safe_logpdf,
             )
 
         return _lazyselect(
@@ -347,15 +272,15 @@ class skewt_gen(rv_continuous):
 
         def case4(x, a, df):
             # if df == 1:
-            #     return _lazywhere(
-            #         x >= 0, [x], lambda x_: 2 * cauchy.cdf(x_) - 1, f2=lambda x_: 0
+            #     return xpx.apply_where(
+            #         x >= 0, (x), lambda x_: 2 * cauchy.cdf(x_) - 1, lambda x_: 0
             #     )
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x >= 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: 2 * t.cdf(x_, df_) - 1,
-            #         f2=lambda x_, df_: 0,
+            #         lambda x_, df_: 0,
             #     )
             condlist = [(df == 1) & (x >= 0), (df != 1) & (x >= 0), x < 0]
             funclist = [
@@ -369,15 +294,15 @@ class skewt_gen(rv_continuous):
 
         def case5(x, a, df):
             # if df == 1:
-            #     return _lazywhere(
-            #         x >= 0, [x], lambda x_: 1, f2=lambda x_: 2 * (1 - cauchy.cdf(-x_))
+            #     return xpx.apply_where(
+            #         x >= 0, (x), lambda x_: 1, lambda x_: 2 * (1 - cauchy.cdf(-x_))
             #     )
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x >= 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: 1,
-            #         f2=lambda x_, df_: 2 * (1 - t.cdf(-x_, df_)),
+            #         lambda x_, df_: 2 * (1 - t.cdf(-x_, df_)),
             #     )
             condlist = [x >= 0, (df == 1) & (x < 0), (df != 1) & (x < 0)]
             funclist = [
@@ -394,11 +319,11 @@ class skewt_gen(rv_continuous):
             #     return cauchy.cdf(x)
             # else:
             #     return t.cdf(x, df)
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
                 (x, df),
                 lambda x_, df_: cauchy.cdf(x_),
-                f2=lambda x_, df_: t.cdf(x_, df_),
+                lambda x_, df_: t.cdf(x_, df_),
             )
 
         # case6 = np.vectorize(case6, otypes=["float64"], excluded=["a", "df"])
@@ -424,12 +349,12 @@ class skewt_gen(rv_continuous):
             #         ]
             #     )
 
-            # return _lazywhere(
+            # return xpx.apply_where(
             #     df == 1,
             #     (x, a, df),
             #     lambda x_, a_, df_: np.arctan(x_) / np.pi
             #     + np.arccos(a_ / np.sqrt(1 + a_**2) / np.sqrt(1 + x_**2)) / np.pi,
-            #     f2=f2,
+            #     f2,
             # )
 
         case7_cdf = np.vectorize(case7_cdf, otypes=["float64"], excluded=["a", "df"])
@@ -462,18 +387,18 @@ class skewt_gen(rv_continuous):
             # return np.log(self._cdf(x, a, df))
 
             # if df == 1:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x > 0,
-            #         [x],
+            #         (x),
             #         lambda x_: np.log(2 * np.arctan(x) / np.pi),
-            #         f2=lambda x_: -np.inf,
+            #         lambda x_: -np.inf,
             #     )
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x > 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: np.log(2 * t.cdf(x_, df_) - 1),
-            #         f2=lambda x_, df_: -np.inf,
+            #         lambda x_, df_: -np.inf,
             #     )
             condlist = [(df == 1) & (x > 0), x <= 0, (df != 1) & (x > 0)]
             funclist = [
@@ -488,18 +413,18 @@ class skewt_gen(rv_continuous):
         def case5(x, a, df):
             # return np.log(self._cdf(x, a, df))
             # if df == 1:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x >= 0,
-            #         [x],
+            #         (x),
             #         lambda x_: 0,
-            #         f2=lambda x_: np.log(1 - 2 * np.arctan(-x) / np.pi),
+            #         lambda x_: np.log(1 - 2 * np.arctan(-x) / np.pi),
             #     )
             # else:
-            #     return _lazywhere(
+            #     return xpx.apply_where(
             #         x >= 0,
-            #         [x, df],
+            #         (x, df),
             #         lambda x_, df_: 0,
-            #         f2=lambda x_, df_: np.log(2 - 2 * t.cdf(-x_, df_)),
+            #         lambda x_, df_: np.log(2 - 2 * t.cdf(-x_, df_)),
             #     )
             condlist = [x >= 0, (df == 1) & (x < 0), (df != 1) & (x < 0)]
             funclist = [
@@ -516,11 +441,11 @@ class skewt_gen(rv_continuous):
             #     return cauchy.logcdf(x)
             # else:
             #     return t.logcdf(x, df)
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
                 (x, df),
                 lambda x_, df_: cauchy.logcdf(x_),
-                f2=lambda x_, df_: t.logcdf(x_, df_),
+                lambda x_, df_: t.logcdf(x_, df_),
             )
 
         # case6 = np.vectorize(case6, otypes=["float64"], excluded=["a", "df"])
@@ -549,7 +474,7 @@ class skewt_gen(rv_continuous):
             #         )
             #     )
 
-            # return _lazywhere(
+            # return xpx.apply_where(
             #     df == 1,
             #     (x, a, df),
             #     lambda x_, a_, df_: np.log(
@@ -557,7 +482,7 @@ class skewt_gen(rv_continuous):
             #         + np.arccos(a_ / np.sqrt(1 + a_**2) / np.sqrt(1 + x_**2))
             #         / np.pi
             #     ),
-            #     f2=f2,
+            #     f2,
             # )
 
         case7_logcdf = np.vectorize(case7_logcdf, otypes=["float64"])
@@ -578,7 +503,7 @@ class skewt_gen(rv_continuous):
 
     def _ppf(self, q, a, df):
         def case1(q, a, df):
-            # return _lazywhere(q == 0, [q], lambda q_: 0, f2=lambda q_: halfnorm.ppf(q_))
+            # return xpx.apply_where(q == 0, (q), lambda q_: 0, lambda q_: halfnorm.ppf(q_))
             return halfnorm.ppf(q)
 
         def case2(q, a, df):
@@ -592,11 +517,11 @@ class skewt_gen(rv_continuous):
             #     return cauchy.ppf((1 + q) / 2.0)
             # else:
             #     return t.ppf((1 + q) / 2.0, df)
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
                 (q, df),
                 lambda q_, df_: cauchy.ppf((1 + q_) / 2.0),
-                f2=lambda q_, df_: t.ppf((1 + q_) / 2.0, df_),
+                lambda q_, df_: t.ppf((1 + q_) / 2.0, df_),
             )
 
         # case4 = np.vectorize(case4, otypes=["float64"], excluded=["a", "df"])
@@ -606,11 +531,11 @@ class skewt_gen(rv_continuous):
             #     return cauchy.ppf(q / 2.0)
             # else:
             #     return t.ppf(q / 2.0, df)
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
                 (q, df),
                 lambda q_, df_: cauchy.ppf(q_ / 2.0),
-                f2=lambda q_, df_: t.ppf(q_ / 2.0, df_),
+                lambda q_, df_: t.ppf(q_ / 2.0, df_),
             )
 
         # case5 = np.vectorize(case5, otypes=["float64"], excluded=["a", "df"])
@@ -620,11 +545,11 @@ class skewt_gen(rv_continuous):
             #     return cauchy.ppf(q)
             # else:
             #     return t.ppf(q, df)
-            return _lazywhere(
+            return xpx.apply_where(
                 df == 1,
                 (q, df),
                 lambda q_, df_: cauchy.ppf(q_),
-                f2=lambda q_, df_: t.ppf(q_, df_),
+                lambda q_, df_: t.ppf(q_, df_),
             )
 
         # case6 = np.vectorize(case6, otypes=["float64"], excluded=["a", "df"])
@@ -711,7 +636,7 @@ class skewt_gen(rv_continuous):
         return out
 
     def _stats(self, a, df):
-        df = _lazywhere(df > 66175282, [df], lambda df: np.inf, df)
+        df = xpx.apply_where(df > 66175282, (df), lambda df: np.inf, df)
         infinite_df = np.isposinf(df)
         infinite_a = np.isinf(a)
         b_nu = np.repeat(1.0, (len(df),))
