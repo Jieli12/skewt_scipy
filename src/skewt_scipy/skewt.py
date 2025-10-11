@@ -636,7 +636,7 @@ class skewt_gen(rv_continuous):
         return out
 
     def _stats(self, a, df):
-        df = xpx.apply_where(df > 66175282, (df), lambda df: np.inf, df)
+        df = xpx.apply_where(df > 66175282, (df), lambda df_: np.inf, lambda df_: df_)
         infinite_df = np.isposinf(df)
         infinite_a = np.isinf(a)
         b_nu = np.repeat(1.0, (len(df),))
