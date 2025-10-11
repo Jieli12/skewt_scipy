@@ -98,4 +98,4 @@ skewt.fit(data, fa=a, fdf=df)  # fixed a and df
 
 ## Change Log
 
-`skewt_scipy-0.1.2` needs the version of `scipy>=1.16.0`. Please upgrade either `skewt_scipy` or `scipy` to make them compatible.
+`skewt_scipy-0.1.2` needs the version of `SciPy>=1.16.0`. Please upgrade either `skewt_scipy` or `SciPy` to make them compatible.
