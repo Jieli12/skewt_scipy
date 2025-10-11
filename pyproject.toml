@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "skewt_scipy"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
     { name="Jie Li", email="lijie_12@outlook.com" },
 ]
@@ -15,7 +15,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     'numpy',
-    'scipy',
+    'scipy>=1.16.0',
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -29,8 +29,8 @@ classifiers = [
 # NOT have to specify this line.
 include-package-data = true
 
-[tool.setuptools.packages.find]
-where = ["src/skewt_scipy/"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/skewt_scipy"]
 
 [project.urls]
 "Homepage" = "https://github.com/Jieli12/skewt_scipy"
