@@ -2,8 +2,8 @@
 Author         : Jie Li, Innovision IP Ltd and School of Mathematics, Statistics and Actuarial Science, University of Kent.
 Date           : 2024-01-20 23:30:09
 Last Revision  : 2024-01-22 13:42:06
-Last Author    : Jie Li
-File Path      : /skewt_scipy/test/test.py
+Last Author : Jieli12
+File Path   : /skewt_scipy/test/test.py
 Description    :
 
 
@@ -13,7 +13,7 @@ Description    :
 
 
 
-Copyright (c) 2024, Jie Li, jl725@kent.ac.uk
+Copyright (c) 2024, Jie Li, lijie_12@outlook.com
 All Rights Reserved.
 """
 import numpy as np

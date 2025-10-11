@@ -2,8 +2,8 @@
 Author         : Jie Li, Innovision IP Ltd and School of Mathematics, Statistics and Actuarial Science, University of Kent.
 Date           : 2023-12-24 20:58:11
 Last Revision  : 2024-02-28 21:15:18
-Last Author    : Jie Li
-File Path      : /skewt_scipy/src/skewt_scipy/skewt.py
+Last Author : Jieli12
+File Path   : /skewt_scipy/src/skewt_scipy/skewt.py
 Description    :
 
 
@@ -13,14 +13,14 @@ Description    :
 
 
 
-Copyright (c) 2023, Jie Li, jl725@kent.ac.uk
+Copyright (c) 2023, Jie Li, lijie_12@outlook.com
 All Rights Reserved.
 """
 
 # %%
 import numpy as np
 from scipy import integrate, optimize
-from scipy._lib._util import _lazyselect, _lazywhere
+from scipy._lib._util import _lazyselect
 from scipy.special import loggamma
 from scipy.stats import (
     cauchy,
@@ -34,6 +34,85 @@ from scipy.stats import (
     t,
 )
 from scipy.stats._distn_infrastructure import _ShapeInfo
+
+
+# Define _lazywhere as it was removed from scipy
+def _lazywhere(cond, arrays, f, f2=None):
+    """
+    Evaluate a function on array elements where a condition is met.
+
+    This is a replacement for scipy._lib._util._lazywhere which was removed
+    in scipy 1.12+.
+
+    Parameters
+    ----------
+    cond : array_like
+        Boolean condition array
+    arrays : tuple of arrays
+        Arrays to pass to functions
+    f : callable
+        Function to call where cond is True
+    f2 : callable, array, or None, optional
+        Function to call where cond is False, or a constant array/value.
+        If None, uses 0.
+
+    Returns
+    -------
+    out : array
+        Result array with f applied where cond is True and f2 elsewhere
+    """
+    # Handle the case where f2 is a constant value/array (not a function)
+    if f2 is None:
+        f2_is_const = True
+        f2_val = 0
+    elif callable(f2):
+        f2_is_const = False
+    else:
+        f2_is_const = True
+        f2_val = f2
+
+    arrays = tuple(np.asarray(a) for a in arrays)
+    cond = np.asarray(cond)
+
+    # Handle scalar case
+    if cond.ndim == 0:
+        if cond:
+            return f(*arrays)
+        else:
+            if f2_is_const:
+                return f2_val
+            else:
+                return f2(*arrays)
+
+    # Handle array case - determine output shape from condition or arrays
+    if arrays:
+        out_shape = np.broadcast_shapes(cond.shape, *[a.shape for a in arrays])
+        out = np.empty(out_shape, dtype=float)
+        # Broadcast condition to output shape
+        cond = np.broadcast_to(cond, out_shape)
+    else:
+        out = np.empty(np.shape(cond), dtype=float)
+
+    if np.any(cond):
+        arrays_true = tuple(np.extract(cond, np.broadcast_to(a, out.shape)) for a in arrays)
+        out[cond] = f(*arrays_true)
+
+    if np.any(~cond):
+        if f2_is_const:
+            # f2 is a constant value or array
+            if np.isscalar(f2_val):
+                out[~cond] = f2_val
+            else:
+                # f2_val is an array, extract matching elements
+                f2_val_arr = np.asarray(f2_val)
+                f2_val_broadcast = np.broadcast_to(f2_val_arr, out.shape)
+                out[~cond] = np.extract(~cond, f2_val_broadcast)
+        else:
+            # f2 is a function
+            arrays_false = tuple(np.extract(~cond, np.broadcast_to(a, out.shape)) for a in arrays)
+            out[~cond] = f2(*arrays_false)
+
+    return out
 
 
 class skewt_gen(rv_continuous):
@@ -200,14 +279,46 @@ class skewt_gen(rv_continuous):
             )
 
         def case7_logpdf(x, a, df):
+            # return _lazywhere(
+            #     df == 1,
+            #     [x, a, df],
+            #     lambda x_, a_, df_: cauchy.logpdf(x_)
+            #     + np.log1p(a_ * x_ / np.sqrt(1 + x_**2 * (1 + a_**2))),
+            #     f2=lambda x_, a_, df_: np.log(2)
+            #     + t.logpdf(x_, df_)
+            #     + t.logcdf(a_ * x_ * np.sqrt((df_ + 1) / (x_**2 + df_)), df_ + 1),
+            # )
+            def safe_logpdf(x_, a_, df_):
+                # Handle edge cases to avoid sqrt warnings
+                with np.errstate(invalid='ignore', divide='ignore'):
+                    # Compute the argument for sqrt
+                    sqrt_arg = (df_ + 1) / (x_**2 + df_)
+
+                    # Check for invalid values
+                    valid_mask = np.isfinite(x_) & np.isfinite(sqrt_arg) & (sqrt_arg >= 0)
+
+                    result = np.full_like(x_, -np.inf, dtype=float)
+
+                    if np.any(valid_mask):
+                        x_valid = x_[valid_mask] if hasattr(x_, '__len__') else x_
+                        a_valid = a_[valid_mask] if hasattr(a_, '__len__') else a_
+                        df_valid = df_[valid_mask] if hasattr(df_, '__len__') else df_
+                        sqrt_arg_valid = sqrt_arg[valid_mask] if hasattr(sqrt_arg, '__len__') else sqrt_arg
+
+                        result[valid_mask] = (
+                            np.log(2)
+                            + t.logpdf(x_valid, df_valid)
+                            + t.logcdf(a_valid * x_valid * np.sqrt(sqrt_arg_valid), df_valid + 1)
+                        )
+
+                    return result
+
             return _lazywhere(
                 df == 1,
                 [x, a, df],
                 lambda x_, a_, df_: cauchy.logpdf(x_)
                 + np.log1p(a_ * x_ / np.sqrt(1 + x_**2 * (1 + a_**2))),
-                f2=lambda x_, a_, df_: np.log(2)
-                + t.logpdf(x_, df_)
-                + t.logcdf(a_ * x_ * np.sqrt((df_ + 1) / (x_**2 + df_)), df_ + 1),
+                f2=safe_logpdf,
             )
 
         return _lazyselect(
