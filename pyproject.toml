@@ -6,9 +6,9 @@ build-backend = "hatchling.build"
 name = "skewt_scipy"
 version = "0.1.1"
 authors = [
-    { name="Jie Li", email="jl725@kent.ac.uk" },
+    { name="Jie Li", email="lijie_12@outlook.com" },
 ]
-maintainers = [{ name="Jie Li", email="jl725@kent.ac.uk" },]
+maintainers = [{ name="Jie Li", email="lijie_12@outlook.com" },]
 
 description = "The skew student t distribution"
 readme = "README.md"
